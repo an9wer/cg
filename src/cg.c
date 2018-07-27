@@ -3,12 +3,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
+#include <sys/stat.h>
 #include "cg.h"
 
 char *get_home_dir(void)
 {
     struct passwd *pw = getpwuid(getuid());
-    // TODO: if (pw == NULL)
+    if (pw == NULL) {
+        PERROR;
+        exit(1);
+    }
     return pw->pw_dir;
 }
 
@@ -17,35 +22,42 @@ void get_cg_file(char *cg_file, size_t max)
     char *home= get_home_dir();
 
     if (strlen(home) + strlen(CG_FILE) + 1 > max) {
-        // TODO: Error
-        fprintf(stderr, "Error: get_cg_file");
+        PERROR;
         exit(1);
     }
     cg_file = strcpy(cg_file, home);
     cg_file = strcat(cg_file, CG_FILE);
 }
 
-void cg_read(void)
+void open_cg_file(FILE **stream)
 {
+    struct stat stat_buf;
     char cg_file[STRBUFSIZ];
+
     get_cg_file(cg_file, STRBUFSIZ);
 
-    FILE *fp = fopen(cg_file, "r");
-    // TODO: if (fp == NULL)
-
-    size_t capacity = REDBUFSIZ, buffer_size = 0;
-    char *buffer = malloc(capacity - buffer_size);
-    while ((buffer_size += fread(buffer + buffer_size, sizeof(char), capacity - buffer_size, fp)) == capacity) {
-        capacity *= 1.5;
-        buffer = realloc(buffer, capacity);
+    // create cg file if it doesn't exist.
+    if (stat(cg_file, &stat_buf) == 0) {
+        if (!S_ISREG(stat_buf.st_mode)) {
+            PERROR;
+            exit(1);
+        }
+    } else {
+        *stream = fopen(cg_file, "w");
+        fclose(*stream);
     }
-    printf("%s", buffer);
 
-    free(buffer);
-    fclose(fp);
+    *stream = fopen(cg_file, "r+");
+    rewind(*stream);
 }
 
+void parse_from_cg_file(void)
+{
+}
+
+
+#ifndef DEBUG
 int main(void)
 {
-    cg_read();
 }
+#endif
