@@ -1,9 +1,5 @@
 ## TODO
 
-1.  parse cg file
+1.  parse options
 
-2.  unit test
-
-3.  parse options
-
-4.  makefile
+2.  makefile

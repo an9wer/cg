@@ -4,36 +4,34 @@
 #include <time.h>
 #include "cg.h"
 
-void write_time_to_cg_file(void)
+void generate_fake_data(void)
 {
     FILE *stream;
+    char buffer[STRBUFSIZ];
     time_t now = time(NULL);
 
     open_cg_file(&stream);
-    char buffer[STRBUFSIZ];
-    snprintf(buffer, STRBUFSIZ, "%ld", now);
-    fwrite(buffer, sizeof(char), strlen(buffer), stream);
-    
+    for (int i = 0; i < 10; i++) {
+        snprintf(buffer, STRBUFSIZ, "%ld\n", now - i * DATESIZ);
+        fwrite(buffer, sizeof(char), strlen(buffer), stream);
+    }
     fclose(stream);
 }
 
-void parse_time_from_cg_file(void)
+void test_parse(void)
 {
     FILE *stream;
-    char buffer[STRBUFSIZ];
+    commits_t commits = {0, NULL};
 
     open_cg_file(&stream);
-    fread(buffer, sizeof(char), STRBUFSIZ, stream);
-    time_t now = atol(buffer);
-    printf("%ld\n", now);
+    parse_from_cg_file(&stream, &commits);
+    generate_cg(&commits);
 
-    struct tm *tmp = localtime(&now);
-    strftime(buffer, STRBUFSIZ, "%r, %a %b %d, %Y", tmp);
-    puts(buffer);
+    fclose(stream);
 }
 
 int main(void)
 {
-    write_time_to_cg_file();
-    parse_time_from_cg_file();
+    generate_fake_data();
+    test_parse();
 }
