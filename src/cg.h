@@ -4,20 +4,21 @@
 #include <stdio.h>
 #include <time.h>
 
-#define CG_FILE "/.cg"
-
 #define REDBUFSIZ 4096
 #define STRBUFSIZ 128
 #define DATESIZ 86400   // 24 * 60 * 60
 
 #define GREEN "\033[0;32m"
 #define RESET "\033[0m"
+#define NEWLINE "\n"
 #define SQUARE "⬛"
 
 #define DEBUG
 #ifdef DEBUG
+#   define CG_FILE "/.cg.test"
 #   define PERROR fprintf(stderr, "Error: %s:%d:%s\n", __FILE__, __LINE__, __func__)
 #else
+#   define CG_FILE "/.cg"
 #   define PERROR
 #endif /* DEBUG */
 

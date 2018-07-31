@@ -1,5 +1,7 @@
 ## TODO
 
-1.  parse options
+1.  display month
 
-2.  makefile
+2.  parse options
+
+3.  makefile

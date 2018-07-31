@@ -11,7 +11,7 @@ void generate_fake_data(void)
     time_t now = time(NULL);
 
     open_cg_file(&stream);
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 100; i++) {
         snprintf(buffer, STRBUFSIZ, "%ld\n", now - i * DATESIZ);
         fwrite(buffer, sizeof(char), strlen(buffer), stream);
     }
