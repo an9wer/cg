@@ -32,6 +32,11 @@ typedef struct {
     commit_t *commit;
 } commits_t;
 
+typedef struct {
+    unsigned int col;
+    char *mon;
+} header_t;
+
 enum week {
     Sun,
     Mon,
