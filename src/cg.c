@@ -76,6 +76,7 @@ void parse_from_cg_file(FILE **stream, commits_t *commits)
             for (int i = 0; i < commits->size; i++) {
                 if (date == commits->commit[i].date) {
                     commits->commit[i].count += 1;
+                    commits->max_count = MAX(commits->max_count, commits->commit[i].count);
                     flag = 1;
                     break;
                 }
@@ -99,7 +100,18 @@ void draw(commits_t *commits, time_t date, bool newline, char **output)
     unsigned short flag = 0;
     for (int i = 0; i < commits->size; i++) {
         if (commits->commit[i].date == date) {
-            plot = newline ? GREEN SQUARE RESET NEWLINE : GREEN SQUARE RESET;
+            if (commits->commit[i].count > 0 && commits->commit[i].count <= commits->max_count / 4)
+                plot = newline ? LOWEST SQUARE RESET NEWLINE : LOWEST SQUARE RESET;
+            else if (commits->commit[i].count > commits->max_count / 4 && commits->commit[i].count <= commits->max_count / 4 * 2)
+                plot = newline ? LOW SQUARE RESET NEWLINE : LOW SQUARE RESET;
+            else if (commits->commit[i].count > commits->max_count / 4 * 2 && commits->commit[i].count <= commits->max_count / 4 * 3)
+                plot = newline ? HIGH SQUARE RESET NEWLINE : HIGH SQUARE RESET;
+            else if (commits->commit[i].count > commits->max_count / 4 * 3 && commits->commit[i].count <= commits->max_count)
+                plot = newline ? HIGHEST SQUARE RESET NEWLINE : HIGHEST SQUARE RESET;
+            else {
+                PERROR;
+                exit(1);
+            }
             *output = realloc(*output, strlen(*output) + strlen(plot) + 1);
             *output = strcat(*output, plot);
             flag = 1;
@@ -115,20 +127,17 @@ void draw(commits_t *commits, time_t date, bool newline, char **output)
 
 int header_sort(const void *a, const void *b)
 {
-    if (((header_t *)a)->col > ((header_t *)b)->col) {
-        return 1;
-    } else {
-        return -1;
-    }
+    if (((header_t *)a)->col > ((header_t *)b)->col) return 1;
+    else return -1;
 }
 
 void generate_cg(commits_t *commits)
 {
     header_t header[12];
+    char header_out[BUFSIZ];
 
     char *output = malloc(1);
     output[0] = '\0';
-    //output = strcat(output, "abc");
 
     char *month[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
     char *week[7] = {"Sat ", "Mon ", "Tue ", "Wed ", "Thu ", "Fri ", "Sun "};
@@ -148,7 +157,7 @@ void generate_cg(commits_t *commits)
             date_mday = localtime(&date)->tm_mday;
             date_mon = localtime(&date)->tm_mon;
             if (date_mday == 1) {
-                header[date_mon].col = (52 - j) * 2;
+                header[date_mon].col = (52 - j) * 2 + 3;
                 header[date_mon].mon = month[date_mon];
             }
             draw(commits, date, false, &output);
@@ -161,10 +170,11 @@ void generate_cg(commits_t *commits)
         }
     }
     qsort(header, 12, sizeof(header_t), header_sort);
-    char header_out[BUFSIZ];
     sprintf(header_out, "    %%%ds%%%ds%%%ds%%%ds%%%ds%%%ds%%%ds%%%ds%%%ds%%%ds%%%ds%%%ds\n", header[0].col, header[1].col - header[0].col, header[2].col - header[1].col, header[3].col - header[2].col, header[4].col - header[3].col, header[5].col - header[4].col, header[6].col - header[5].col, header[7].col - header[6].col, header[8].col - header[7].col, header[9].col - header[8].col, header[10].col - header[9].col, header[11].col - header[10].col);
     printf(header_out, header[0].mon, header[1].mon, header[2].mon, header[3].mon, header[4].mon, header[5].mon, header[6].mon, header[7].mon, header[8].mon, header[9].mon, header[10].mon, header[11].mon);
+
     printf("%s", output);
+    printf("                                                                                            less %s%s%s%s more\n", LOWEST SQUARE RESET, LOW SQUARE RESET, HIGH SQUARE RESET, HIGHEST SQUARE RESET);
     free(output);
     free(commits->commit);
 }

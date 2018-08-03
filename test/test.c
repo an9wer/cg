@@ -10,10 +10,21 @@ void generate_fake_data(void)
     char buffer[STRBUFSIZ];
     time_t now = time(NULL);
 
+    char *home= get_home_dir();
+    char cg_file[STRBUFSIZ];
+    strcpy(cg_file, home);
+    strcat(cg_file, CG_FILE);
+    remove(cg_file);
+
     open_cg_file(&stream);
-    for (int i = 0; i < 100; i++) {
-        snprintf(buffer, STRBUFSIZ, "%ld\n", now - i * DATESIZ);
-        fwrite(buffer, sizeof(char), strlen(buffer), stream);
+    srand(time(NULL));
+    for (int i = 0; i < 7; i++) {
+        for (int j = 0; j < 365; j++) {
+            if (rand() % 7 == 0) {
+                snprintf(buffer, STRBUFSIZ, "%ld\n", now - j * DATESIZ);
+                fwrite(buffer, sizeof(char), strlen(buffer), stream);
+            }
+        }
     }
     fclose(stream);
 }
@@ -21,7 +32,7 @@ void generate_fake_data(void)
 void test_parse(void)
 {
     FILE *stream;
-    commits_t commits = {0, NULL};
+    commits_t commits = {0, NULL, 1};
 
     open_cg_file(&stream);
     parse_from_cg_file(&stream, &commits);
