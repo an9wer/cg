@@ -1,11 +1,11 @@
 ## TODO
 
-1.  display month :heavy_check_mark:
+-   display month :heavy_check_mark:
 
-2.  commit level :heavy_check_mark:
+-   commit level :heavy_check_mark:
 
-3.  parse options
+-   parse options
 
-4.  tty interaction
+-   tty interaction
 
-4.  makefile
+-   makefile

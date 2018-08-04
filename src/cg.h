@@ -12,10 +12,9 @@
 #define HIGH "\033[38;5;34m"
 #define LOW "\033[38;5;82m"
 #define LOWEST "\033[38;5;154m"
-//#define LOWEST "\033[38;5;118m"
 #define RESET "\033[0m"
 #define NEWLINE "\n"
-#define SQUARE "⬛"
+#define SQUARE "\u2B1B" // ⬛ thx: https://www.fileformat.info/info/unicode/char/2b1b/index.htm
 
 #define DEBUG
 #ifdef DEBUG
