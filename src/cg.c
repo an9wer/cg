@@ -26,7 +26,7 @@ char *get_home_dir(void)
 
 time_t truncate_time(time_t time)
 {
-    return time / DATESIZ * DATESIZ;
+    return time / DAYSIZ * DAYSIZ;
 }
 
 void get_cg_file(char *cg_file, size_t max)
@@ -94,45 +94,32 @@ void parse_from_cg_file(FILE **stream, commits_t *commits)
     } while (!feof(*stream));
 }
 
-void draw_body(commits_t *commits, time_t date, bool newline, char **output)
-{
-    char *plot;
-    unsigned short flag = 0;
-    for (int i = 0; i < commits->size; i++) {
-        if (commits->commit[i].date == date) {
-            if (commits->commit[i].count > commits->max_count / 4 * 3 && commits->commit[i].count <= commits->max_count)
-                plot = newline ? HIGHEST SQUARE RESET NEWLINE : HIGHEST SQUARE RESET;
-            else if (commits->commit[i].count > commits->max_count / 4 * 2 && commits->commit[i].count <= commits->max_count / 4 * 3)
-                plot = newline ? HIGH SQUARE RESET NEWLINE : HIGH SQUARE RESET;
-            else if (commits->commit[i].count > commits->max_count / 4 && commits->commit[i].count <= commits->max_count / 4 * 2)
-                plot = newline ? LOW SQUARE RESET NEWLINE : LOW SQUARE RESET;
-            else if (commits->commit[i].count > 0 && commits->commit[i].count <= commits->max_count / 4)
-                plot = newline ? LOWEST SQUARE RESET NEWLINE : LOWEST SQUARE RESET;
-            else {
-                PERROR;
-                exit(1);
-            }
-            *output = realloc(*output, strlen(*output) + strlen(plot) + 1);
-            *output = strcat(*output, plot);
-            flag = 1;
-            break;
-        }
-    }
-    if (flag == 0) {
-        plot = newline ? SQUARE NEWLINE : SQUARE;
-        *output = realloc(*output, strlen(*output) + strlen(plot) + 1);
-        *output = strcat(*output, plot);
-    }
-}
-
 int header_sort(const void *a, const void *b)
 {
     if (((header_t *)a)->col > ((header_t *)b)->col) return 1;
     else return -1;
 }
 
-void draw_header(header_t *header)
+void draw_header(void)
 {
+    header_t header[12];
+    char *month[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    time_t today = truncate_time(time(NULL));
+    time_t latest_week_day;
+    time_t day;
+    struct tm *tmp;
+    for (int i = 0; i < 7; i++) {
+        latest_week_day = today - localtime(&today)->tm_wday * DAYSIZ + i * DAYSIZ;
+        for (int j = 52; j >= 0; j--) {
+            day = latest_week_day - j * 7 * DAYSIZ;
+            tmp = localtime(&day);
+            if (tmp->tm_mday == 1) {
+                header[tmp->tm_mon].col = (52 - j) * 2 + 3;
+                header[tmp->tm_mon].mon = month[tmp->tm_mon];
+            }
+        }
+    }
+
     qsort(header, 12, sizeof(header_t), header_sort);
 
     char output_partial[STRBUFSIZ];
@@ -157,44 +144,68 @@ void draw_foot()
     printf("%*sless %s%s%s%s more\n", 92, "", LOWEST SQUARE RESET, LOW SQUARE RESET, HIGH SQUARE RESET, HIGHEST SQUARE RESET);
 }
 
-void generate_cg(commits_t *commits)
+void _draw_body(commits_t *commits, time_t day)
 {
-    header_t header[12];
-
-    char *output = malloc(1);
-    output[0] = '\0';
-
-    char *month[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-    char *week[7] = {"Sat ", "Mon ", "Tue ", "Wed ", "Thu ", "Fri ", "Sun "};
-    time_t now = truncate_time(time(NULL));
-    int now_wday = localtime(&now)->tm_wday;
-    time_t latest_sun = now - DATESIZ * now_wday;
-    time_t latest_day;
-    time_t date;
-    struct tm *tmp;
-    for (int i = 0; i < 7; i++) {
-        latest_day = latest_sun + i * DATESIZ;
-        output = realloc(output, strlen(output) + strlen(week[i]) + 1);
-        output = strcat(output, week[i]);
-        for (int j = 52; j > 0; j--) {
-            date = latest_day - j * 7 * DATESIZ;
-            tmp = localtime(&date);
-            if (tmp->tm_mday == 1) {
-                header[tmp->tm_mon].col = (52 - j) * 2 + 3;
-                header[tmp->tm_mon].mon = month[tmp->tm_mon];
+    time_t today = truncate_time(time(NULL));
+    unsigned int higher = commits->max_count;
+    unsigned int high = commits->max_count / 4 * 3;
+    unsigned int low = commits->max_count / 4 * 2;
+    unsigned int lower = commits->max_count / 4;
+    unsigned short flag = 0;
+    char *plot;
+    if (day == DAYBEYOND) {
+        plot = NEWLINE;
+    } else {
+        for (int i = 0; i < commits->size; i++) {
+            if (commits->commit[i].date == day) {
+                if (commits->commit[i].count > high && commits->commit[i].count <= higher)
+                    plot = day >= today - localtime(&today)->tm_wday * DAYSIZ ? HIGHEST SQUARE RESET NEWLINE : HIGHEST SQUARE RESET;
+                else if (commits->commit[i].count > low && commits->commit[i].count <= high)
+                    plot = day >= today - localtime(&today)->tm_wday * DAYSIZ ? HIGH SQUARE RESET NEWLINE : HIGH SQUARE RESET;
+                else if (commits->commit[i].count > lower && commits->commit[i].count <= low)
+                    plot = day >= today - localtime(&today)->tm_wday * DAYSIZ ? LOW SQUARE RESET NEWLINE : LOW SQUARE RESET;
+                else if (commits->commit[i].count > 0 && commits->commit[i].count <= lower)
+                    plot = day >= today - localtime(&today)->tm_wday * DAYSIZ ? LOWEST SQUARE RESET NEWLINE : LOWEST SQUARE RESET;
+                else {
+                    PERROR;
+                    exit(1);
+                }
+                flag = 1;
+                break;
             }
-            draw_body(commits, date, false, &output);
         }
-        if (i <= now_wday) {
-            draw_body(commits, latest_day, true, &output);
-        } else {
-            output = realloc(output, strlen(output) + strlen(NEWLINE) + 1);
-            output = strcat(output, NEWLINE);
+        if (flag == 0) {
+            plot = day >= today - localtime(&today)->tm_wday * DAYSIZ ? SQUARE NEWLINE : SQUARE;
         }
     }
-    draw_header(header);
-    printf("%s", output);
+    printf("%s", plot);
+}
+
+void draw_body(commits_t *commits)
+{
+    char *week[7] = {"Sat", "Mon", "Tue", "Wed", "Thu", "Fri", "Sun"};
+    time_t today = truncate_time(time(NULL));
+    time_t latest_week_day;
+    time_t day;
+
+    time_t body[7][53];
+    for (int i = 0; i < 7; i++) {
+        printf("%-4s", week[i]);
+        latest_week_day = today - localtime(&today)->tm_wday * DAYSIZ + i * DAYSIZ;
+        for (int j = 52; j >= 0; j--) {
+            day = latest_week_day - j * 7 * DAYSIZ;
+            if (day > today) day = DAYBEYOND;
+
+            body[i][52-j] = day;
+            _draw_body(commits, day);
+        }
+    }
+}
+
+void generate_cg(commits_t *commits)
+{
+    draw_header();
+    draw_body(commits);
     draw_foot();
-    free(output);
     free(commits->commit);
 }

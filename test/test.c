@@ -21,7 +21,7 @@ void generate_fake_data(void)
     for (int i = 0; i < 7; i++) {
         for (int j = 0; j < 365; j++) {
             if (rand() % 7 == 0) {
-                snprintf(buffer, STRBUFSIZ, "%ld\n", now - j * DATESIZ);
+                snprintf(buffer, STRBUFSIZ, "%ld\n", now - j * DAYSIZ);
                 fwrite(buffer, sizeof(char), strlen(buffer), stream);
             }
         }

@@ -6,7 +6,8 @@
 
 #define REDBUFSIZ 4096
 #define STRBUFSIZ 128
-#define DATESIZ 86400   // 24 * 60 * 60
+#define DAYSIZ 86400   // 24 * 60 * 60
+#define DAYBEYOND -1
 
 #define HIGHEST "\033[38;5;22m"
 #define HIGH "\033[38;5;34m"
