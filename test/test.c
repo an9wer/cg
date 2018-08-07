@@ -31,6 +31,7 @@ void generate_fake_data(void)
 
 void test_parse(void)
 {
+    /*
     FILE *stream;
     commits_t commits = {0, NULL, 1};
 
@@ -39,6 +40,8 @@ void test_parse(void)
     generate_cg(&commits);
 
     fclose(stream);
+    */
+    tty_run();
 }
 
 int main(void)

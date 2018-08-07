@@ -7,12 +7,12 @@
 #define REDBUFSIZ 4096
 #define STRBUFSIZ 128
 #define DAYSIZ 86400   // 24 * 60 * 60
-#define DAYBEYOND -1
 
 #define HIGHEST "\033[38;5;22m"
 #define HIGH "\033[38;5;34m"
 #define LOW "\033[38;5;82m"
 #define LOWEST "\033[38;5;154m"
+#define SELECT "\033[48;5;21m"
 #define RESET "\033[0m"
 #define NEWLINE "\n"
 #define SQUARE "\u2B1B" // ⬛ thx: https://www.fileformat.info/info/unicode/char/2b1b/index.htm
@@ -44,10 +44,22 @@ typedef struct {
     char *mon;
 } header_t;
 
+typedef struct {
+    unsigned short x;
+    unsigned short y;
+} cursor_t;
+
+enum {
+    D_NORMAL,
+    D_SELECT,
+    D_RECOVER,
+};
+
 char *get_home_dir(void);
 time_t truncate_time(time_t time);
 void open_cg_file(FILE **stream);
-void parse_from_cg_file(FILE **stream, commits_t *commits);
-void generate_cg(commits_t *commits);
+void parse_from_cg_file(FILE **stream);
+void generate_cg(void);
+void tty_run(void);
 
 #endif /* CG_H */
