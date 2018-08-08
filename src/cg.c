@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <termios.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include "cg.h"
 
 static char *week[7] = {
@@ -26,25 +27,46 @@ static cursor_t cursor;
 static time_t today;
 static int tty;
 
+#ifdef DEBUG
+FILE *cg;
+#else
+static FILE *cg;
+#endif
+
 #ifndef DEBUG
 int main(void)
 {
 }
 #endif
 
-void tty_reset()
+void cg_exit(int status)
 {
+    if (status != EXIT_SUCCESS) PERROR;
+    if (commits.commit != NULL) free(commits.commit);
+    tty_reset();
+    exit(status);
+}
+
+/* tty  {{{ */
+void tty_reset(void)
+{
+    cursor_visible();
     tcsetattr(tty, TCSANOW, &original_termios);
 }
 
-void tty_init()
+void tty_winsize(void)
+{
+    struct winsize ws;
+    if (ioctl(tty, TIOCGWINSZ, &ws) == -1) cg_exit(EXIT_FAILURE);
+    if (ws.ws_row < 12 || ws.ws_col < 112) cg_exit(EXIT_FAILURE);
+}
+
+void tty_init(void)
 {
     struct termios termios;
 
-    if (tcgetattr(tty, &termios) < 0) {
-        PERROR;
-        exit(EXIT_FAILURE);
-    }
+    if (tcgetattr(tty, &termios) < 0)
+        cg_exit(EXIT_FAILURE);
 
     original_termios = termios;
 
@@ -52,31 +74,113 @@ void tty_init()
     termios.c_cc[VMIN] = 1;
     termios.c_cc[VTIME] = 0;
 
-    if (tcsetattr(tty, TCSANOW, &termios) < 0) {
-        PERROR;
-        exit(EXIT_FAILURE);
-    }
+    if (tcsetattr(tty, TCSANOW, &termios) < 0)
+        cg_exit(EXIT_FAILURE);
     
-    if ((termios.c_lflag & (ECHO | ICANON)) || termios.c_cc[VMIN] != 1 || termios.c_cc[VTIME] != 0) {
-        tty_reset();
-        PERROR;
-        exit(EXIT_FAILURE);
-    }
+    if ((termios.c_lflag & (ECHO | ICANON)) || termios.c_cc[VMIN] != 1 || termios.c_cc[VTIME] != 0)
+        cg_exit(EXIT_FAILURE);
+
+    cursor_hidden();
 }
 
-void move_back_unit(int count)
+void tty_clear_entire_line(void)
 {
-    dprintf(tty, "\033[%iD", count * 2);
+    dprintf(tty, "\033[3K");
 }
 
+void tty_newline(void)
+{
+    dprintf(tty, NEWLINE "\033[K");
+}
+/* }}} tty */
+
+
+/* corsor {{{ */
+void cursor_init(void)
+{
+    cursor.x = 52;
+    cursor.y = localtime(&today)->tm_wday;
+}
+
+/*
+ * Q: hide cursor in terminal
+ * thx: https://www.experts-exchange.com/questions/21115816/How-to-hide-cursor-in-a-Linux-Unix-console.html
+ */
+void cursor_hidden(void)
+{
+    dprintf(tty, "\033[?25l");
+}
+
+void cursor_visible(void)
+{
+    dprintf(tty, "\033[?25h");
+}
+
+void cursor_move_up(int step)
+{
+    dprintf(tty, "\033[%iA", step);
+}
+
+void cursor_move_down(int step)
+{
+    dprintf(tty, "\033[%iB", step);
+}
+
+void cursor_move_left(int step)
+{
+    dprintf(tty, "\033[%iD", step);
+}
+
+void cursor_move_right(int step)
+{
+    dprintf(tty, "\033[%iC", step);
+}
+
+void cursor_move_from_last(void)
+{
+    cursor_move_up(7 - cursor.y);
+    cursor_move_right(4 + cursor.x * 2);
+}
+
+void cursor_move_to_last(void)
+{
+    cursor_move_down(7 - cursor.y);
+    cursor_move_left(4 + cursor.x * 2);
+}
+
+void unit_move_up(int step)
+{
+    cursor.y -= step;
+    if (cursor.y < 0) cg_exit(EXIT_FAILURE);
+    cursor_move_up(step);
+}
+
+void unit_move_down(int step)
+{
+    cursor.y += step;
+    if (cursor.y > 6) cg_exit(EXIT_FAILURE);
+    cursor_move_down(step);
+}
+
+void unit_move_left(int step)
+{
+    cursor.x -= step;
+    if (cursor.x < 0) cg_exit(EXIT_FAILURE);
+    cursor_move_left(2 * step);
+}
+
+void unit_move_right(int step)
+{
+    cursor.x += step;
+    if (cursor.x > 52) cg_exit(EXIT_FAILURE);
+    cursor_move_right(2 * step);
+}
+/* }}} cursor */
 
 char *get_home_dir(void)
 {
     struct passwd *pw = getpwuid(getuid());
-    if (pw == NULL) {
-        PERROR;
-        exit(EXIT_FAILURE);
-    }
+    if (pw == NULL) cg_exit(EXIT_FAILURE);
     return pw->pw_dir;
 }
 
@@ -89,15 +193,13 @@ void get_cg_file(char *cg_file, size_t max)
 {
     char *home= get_home_dir();
 
-    if (strlen(home) + strlen(CG_FILE) + 1 > max) {
-        PERROR;
-        exit(EXIT_FAILURE);
-    }
+    if (strlen(home) + strlen(CG_FILE) + 1 > max) cg_exit(EXIT_FAILURE);
+
     cg_file = strcpy(cg_file, home);
     cg_file = strcat(cg_file, CG_FILE);
 }
 
-void open_cg_file(FILE **stream)
+void open_cg_file()
 {
     struct stat stat_buf;
     char cg_file[STRBUFSIZ];
@@ -106,31 +208,29 @@ void open_cg_file(FILE **stream)
 
     // create cg file if it doesn't exist.
     if (stat(cg_file, &stat_buf) == 0) {
-        if (!S_ISREG(stat_buf.st_mode)) {
-            PERROR;
-            exit(EXIT_FAILURE);
-        }
+        if (!S_ISREG(stat_buf.st_mode))
+            cg_exit(EXIT_FAILURE);
     } else {
-        *stream = fopen(cg_file, "w");
-        fclose(*stream);
+        cg = fopen(cg_file, "w");
+        fclose(cg);
     }
 
-    *stream = fopen(cg_file, "r+");
-    rewind(*stream);
+    cg = fopen(cg_file, "r+");
+    rewind(cg);
 }
 
-void parse_from_cg_file(FILE **stream)
+void parse_from_cg_file()
 {
     char buffer[STRBUFSIZ];
-    time_t date;
+    time_t day;
     unsigned short flag;
     do {
-        if (fgets(buffer, STRBUFSIZ, *stream)) {
-            date = truncate_time(atol(buffer));
+        if (fgets(buffer, STRBUFSIZ, cg)) {
+            day = truncate_time(atol(buffer));
 
             flag = 0;
             for (int i = 0; i < commits.size; i++) {
-                if (date == commits.commit[i].date) {
+                if (day == commits.commit[i].day) {
                     commits.commit[i].count += 1;
                     commits.max_count = MAX(commits.max_count, commits.commit[i].count);
                     flag = 1;
@@ -140,14 +240,12 @@ void parse_from_cg_file(FILE **stream)
             if (flag == 0) {
                 commits.size += 1;
                 commits.commit = realloc(commits.commit, sizeof(commit_t) * commits.size);
-                commits.commit[commits.size-1].date = date;
+                commits.commit[commits.size-1].day = day;
                 commits.commit[commits.size-1].count = 1;
             }
-        } else if (ferror(*stream)) {
-            PERROR;
-            exit(EXIT_FAILURE);
-        }
-    } while (!feof(*stream));
+        } else if (ferror(cg)) 
+            cg_exit(EXIT_FAILURE);
+    } while (!feof(cg));
 }
 
 int header_sort(const void *a, const void *b)
@@ -189,42 +287,36 @@ void draw_header()
         output = realloc(output, strlen(output) + strlen(output_partial) + 1);
         output = strcat(output, output_partial);
     }
-    output = realloc(output, strlen(output) + strlen(NEWLINE) + 1);
-    output = strcat(output, NEWLINE);
+    //output = realloc(output, strlen(output) + strlen(NEWLINE) + 1);
+    //output = strcat(output, NEWLINE);
 
     dprintf(tty, "    %s", output);
+    tty_newline();
 
     free(output);
 }
 
-void draw_foot()
-{
-    dprintf(tty, "%*sless %s%s%s%s more\n", 92, "", LOWEST SQUARE RESET, LOW SQUARE RESET, HIGH SQUARE RESET, HIGHEST SQUARE RESET);
-}
-
-void _draw_unit(time_t day, bool selected, char **unit)
+void _draw_unit(time_t day, bool select, char **unit)
 {
     unsigned int higher = commits.max_count;
     unsigned int high = commits.max_count / 4 * 3;
     unsigned int low = commits.max_count / 4 * 2;
     unsigned int lower = commits.max_count / 4;
 
-    *unit = selected ? SELECT SQUARE RESET : SQUARE;  // default value
+    *unit = select ? SELECT SQUARE RESET : SQUARE;  // default value
 
     for (int i = 0; i < commits.size; i++) {
-        if (commits.commit[i].date == day) {
+        if (commits.commit[i].day == day) {
             if (commits.commit[i].count > high && commits.commit[i].count <= higher)
-                *unit = selected ? SELECT HIGHEST SQUARE RESET : HIGHEST SQUARE RESET;
+                *unit = select ? SELECT HIGHEST SQUARE RESET : HIGHEST SQUARE RESET;
             else if (commits.commit[i].count > low && commits.commit[i].count <= high)
-                *unit = selected ? SELECT HIGH SQUARE RESET : HIGH SQUARE RESET;
+                *unit = select ? SELECT HIGH SQUARE RESET : HIGH SQUARE RESET;
             else if (commits.commit[i].count > lower && commits.commit[i].count <= low)
-                *unit = selected ? SELECT LOW SQUARE RESET : LOW SQUARE RESET;
+                *unit = select ? SELECT LOW SQUARE RESET : LOW SQUARE RESET;
             else if (commits.commit[i].count > 0 && commits.commit[i].count <= lower)
-                *unit = selected ? SELECT LOWEST SQUARE RESET : LOWEST SQUARE RESET;
-            else {
-                PERROR;
-                exit(EXIT_FAILURE);
-            }
+                *unit = select ? SELECT LOWEST SQUARE RESET : LOWEST SQUARE RESET;
+            else
+                cg_exit(EXIT_FAILURE);
             break;
         }
     }
@@ -238,7 +330,7 @@ void draw_unit(time_t day, int mode)
         unit = "  ";
     else {
         switch (mode) {
-            case D_NORMAL :
+            case D_INIT :
             case D_RECOVER :
                 _draw_unit(day, false, &unit);
                 break;
@@ -249,30 +341,11 @@ void draw_unit(time_t day, int mode)
     }
 
     dprintf(tty, "%s", unit);
-    if (mode == D_NORMAL && day >= today - localtime(&today)->tm_wday * DAYSIZ)
-        dprintf(tty, NEWLINE);
-}
 
-void draw_body_line(int mode)
-{
-    dprintf(tty, "\033[0K");
-
-    time_t day;
-    for (int i = cursor.x - 1; i < 53; i++) {
-        day = body[cursor.y - 1][i];
-        switch (mode) {
-            case D_SELECT :
-                if (i == cursor.x - 1)
-                    draw_unit(day, D_SELECT);
-                else
-                    draw_unit(day, D_RECOVER);
-                break;
-            case D_RECOVER :
-                draw_unit(day, D_RECOVER);
-                break;
-        }
-    }
-    move_back_unit(53 - cursor.x + 1);
+    if (mode == D_INIT && day >= today - localtime(&today)->tm_wday * DAYSIZ)
+        tty_newline();
+    if (mode == D_SELECT || mode == D_RECOVER)
+        cursor_move_left(2);
 }
 
 void draw_body()
@@ -287,72 +360,150 @@ void draw_body()
             day = latest_week_day - j * 7 * DAYSIZ;
 
             body[i][52-j] = day;
-            draw_unit(day, D_NORMAL);
+            draw_unit(day, D_INIT);
         }
     }
+    cursor_move_from_last();
 }
 
-void generate_cg()
+void draw_foot_and_select()
 {
+    cursor_move_to_last();
+    tty_clear_entire_line();
+
+    char date[STRBUFSIZ];
+    time_t day = body[cursor.y][cursor.x];
+    strftime(date, STRBUFSIZ, "%Y/%m/%d", localtime(&day));
+
+    unsigned int count = 0;
+    for (int i = 0; i < commits.size; i++) {
+        if (day == commits.commit[i].day) {
+            count = commits.commit[i].count;
+            break;
+        }
+    }
+    char date_count_bar[STRBUFSIZ];
+    sprintf(date_count_bar, "%s: %d", date, count);
+
+    char level_bar[STRBUFSIZ];
+    sprintf(level_bar, "less %s%s%s%s%s more", SQUARE, LOWEST SQUARE RESET,
+            LOW SQUARE RESET, HIGH SQUARE RESET, HIGHEST SQUARE RESET);
+
+    dprintf(tty, "%s%*s%s", date_count_bar, 110 - (int) strlen(date_count_bar) - 20, "", level_bar);
+
+    cursor_move_left(10000);    // hack
+    cursor_move_from_last();
+
+    draw_unit(body[cursor.y][cursor.x], D_SELECT);
+}
+
+void generate_cg(void)
+{
+    cursor_init();
     draw_header();
     draw_body();
-    draw_foot();
-    //free(commits->commit);
+    draw_foot_and_select();
 }
 
-void cursor_init()
+void move_up(void)
 {
-    cursor.x = 53;
-    cursor.y = localtime(&today)->tm_wday + 1;
-    dprintf(tty, "\033[%iA", 9);
-    dprintf(tty, "\033[%iG", cursor.x * 2 + 4 - 1);
-    dprintf(tty, "\033[%iB", cursor.y);
-    //dprintf(tty, "\033[6n");
+    tty_winsize();
 
-    draw_unit(body[cursor.y - 1][cursor.x - 1], D_SELECT);
-    move_back_unit(53 - cursor.x + 1);
+    time_t day = body[cursor.y][cursor.x];
+    draw_unit(day, D_RECOVER);
+
+    if (cursor.y == 0 && cursor.x == 0) {
+        unit_move_right(52);
+        for (int i = 0; i < 7; i++) {
+            unit_move_down(1);
+            if (body[cursor.y][cursor.x] == today)
+                break;
+        }
+    } else if (cursor.y == 0) {
+        unit_move_left(1);
+        unit_move_down(6);
+    } else {
+        unit_move_up(1);
+    }
+    draw_foot_and_select();
 }
 
-void draw_unit_under_cursor(void)
+void move_down(void)
 {
-    draw_unit(body[cursor.y - 1][cursor.x - 1], D_SELECT);
+    tty_winsize();
+
+    time_t day = body[cursor.y][cursor.x];
+    draw_unit(day, D_RECOVER);
+    
+    if (day + DAYSIZ > today) {
+        unit_move_left(cursor.x);
+        unit_move_up(cursor.y);
+    } else if (cursor.y == 6) {
+        unit_move_right(1);
+        unit_move_up(6);
+    } else {
+        unit_move_down(1);
+    }
+    draw_foot_and_select();
+}
+
+void move_left(void)
+{
+    tty_winsize();
+
+    time_t day = body[cursor.y][cursor.x];
+    draw_unit(day, D_RECOVER);
+
+    if (cursor.x == 0) {
+        if (cursor.y == 0) unit_move_down(6);
+        else unit_move_up(1);
+
+        unit_move_right(52);
+        if (body[cursor.y][cursor.x] > today)
+            unit_move_left(1);
+    } else
+        unit_move_left(1);
+
+    draw_foot_and_select();
+}
+
+void move_right(void)
+{
+    tty_winsize();
+
+    time_t day = body[cursor.y][cursor.x];
+    draw_unit(day, D_RECOVER);
+
+    if (cursor.x == 51 && (body[cursor.y][cursor.x] + DAYSIZ > today) || cursor.x == 52) {
+        if (cursor.y == 6) unit_move_up(6);
+        else unit_move_down(1);
+        unit_move_left(cursor.x);
+    }
+    else
+        unit_move_right(1);
+
+    draw_foot_and_select();
 }
 
 void handle(char input)
 {
     switch (input) {
         case 'q' :
-            dprintf(tty, "\033[?25h");
-            tty_reset();
-            exit(EXIT_SUCCESS);
+            cg_exit(EXIT_SUCCESS);
             break;
         case 'h' :
-            draw_body_line(D_RECOVER);
-            dprintf(tty, "\033[%iD", 2);
-            cursor.x -= 1;
-            draw_body_line(D_SELECT);
+            move_left();
             break;
         case 'j' :
-            draw_body_line(D_RECOVER);
-            dprintf(tty, "\033[%iB", 1);
-            cursor.y += 1;
-            draw_body_line(D_SELECT);
+            move_down();
             break;
         case 'k' :
-            draw_body_line(D_RECOVER);
-            dprintf(tty, "\033[%iA", 1);
-            cursor.y -= 1;
-            draw_body_line(D_SELECT);
+            move_up();
             break;
         case 'l' :
-            draw_body_line(D_RECOVER);
-            dprintf(tty, "\033[%iC", 2);
-            cursor.x += 1;
-            draw_body_line(D_SELECT);
+            move_right();
             break;
-        default : ;
     }
-
 }
 
 void tty_run(void)
@@ -360,28 +511,18 @@ void tty_run(void)
     tty = open("/dev/tty", O_RDWR);
     today = truncate_time(time(NULL));
 
+    tty_winsize();
     tty_init();
 
-    /*
-     * Q: hide cursor in terminal
-     * thx: https://www.experts-exchange.com/questions/21115816/How-to-hide-cursor-in-a-Linux-Unix-console.html
-     */
-    dprintf(tty, "\033[?25l");
+    open_cg_file();
+    parse_from_cg_file();
 
-    FILE *stream;
-    open_cg_file(&stream);
-    parse_from_cg_file(&stream);
     generate_cg();
-    fclose(stream);
-
-    cursor_init();
 
     /* handle input */
     char input[1];
     while (read(tty, input, 1)) {
         handle(input[0]);
     }
-
-    dprintf(tty, "\033[?25h");
-    tty_reset();
 }
+

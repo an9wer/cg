@@ -4,9 +4,10 @@
 #include <time.h>
 #include "cg.h"
 
+extern FILE *cg;
+
 void generate_fake_data(void)
 {
-    FILE *stream;
     char buffer[STRBUFSIZ];
     time_t now = time(NULL);
 
@@ -16,31 +17,21 @@ void generate_fake_data(void)
     strcat(cg_file, CG_FILE);
     remove(cg_file);
 
-    open_cg_file(&stream);
+    open_cg_file();
     srand(time(NULL));
     for (int i = 0; i < 7; i++) {
         for (int j = 0; j < 365; j++) {
             if (rand() % 7 == 0) {
                 snprintf(buffer, STRBUFSIZ, "%ld\n", now - j * DAYSIZ);
-                fwrite(buffer, sizeof(char), strlen(buffer), stream);
+                fwrite(buffer, sizeof(char), strlen(buffer), cg);
             }
         }
     }
-    fclose(stream);
+    fclose(cg);
 }
 
 void test_parse(void)
 {
-    /*
-    FILE *stream;
-    commits_t commits = {0, NULL, 1};
-
-    open_cg_file(&stream);
-    parse_from_cg_file(&stream, &commits);
-    generate_cg(&commits);
-
-    fclose(stream);
-    */
     tty_run();
 }
 

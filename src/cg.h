@@ -29,7 +29,7 @@
 #define MAX(a, b) ((a) > (b) ? a : b)
 
 typedef struct {
-    time_t date;
+    time_t day;
     unsigned int count;
 } commit_t;
 
@@ -50,15 +50,19 @@ typedef struct {
 } cursor_t;
 
 enum {
-    D_NORMAL,
+    D_INIT,
     D_SELECT,
     D_RECOVER,
 };
 
+void cg_exit(int status);
+void cursor_hidden(void);
+void cursor_visible(void);
+void tty_reset(void);
 char *get_home_dir(void);
 time_t truncate_time(time_t time);
-void open_cg_file(FILE **stream);
-void parse_from_cg_file(FILE **stream);
+void open_cg_file(void);
+void parse_from_cg_file(void);
 void generate_cg(void);
 void tty_run(void);
 

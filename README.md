@@ -1,8 +1,10 @@
 ## TODO
 
--   display month :heavy_check_mark:
+-   head :heavy_check_mark:
 
--   commit level :heavy_check_mark:
+-   body :heavy_check_mark:
+
+-   foot :heavy_check_mark:
 
 -   parse options
 
