@@ -4,6 +4,8 @@
 #include <time.h>
 #include "cg.h"
 
+#ifdef DEBUG
+
 extern FILE *cg;
 
 void generate_fake_data(void)
@@ -17,10 +19,10 @@ void generate_fake_data(void)
     strcat(cg_file, CG_FILE);
     remove(cg_file);
 
-    open_cg_file();
+    cg_open();
     srand(time(NULL));
-    for (int i = 0; i < 7; i++) {
-        for (int j = 0; j < 365; j++) {
+    for (int i = 0; i < 10; i++) {
+        for (int j = 0; j < 365 + 7; j++) {
             if (rand() % 7 == 0) {
                 snprintf(buffer, STRBUFSIZ, "%ld\n", now - j * DAYSIZ);
                 fwrite(buffer, sizeof(char), strlen(buffer), cg);
@@ -40,3 +42,5 @@ int main(void)
     generate_fake_data();
     test_parse();
 }
+
+#endif /* DEBUG */

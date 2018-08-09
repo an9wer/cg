@@ -8,6 +8,6 @@
 
 -   parse options
 
--   tty interaction
+-   tty interaction :heavy_check_mark:
 
 -   makefile
