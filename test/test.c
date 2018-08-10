@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "cg.h"
 
-#ifdef DEBUG
+#define DEBUG
+#include "cg.h"
 
 extern FILE *cg;
 
@@ -42,5 +42,3 @@ int main(void)
     generate_fake_data();
     test_parse();
 }
-
-#endif /* DEBUG */
