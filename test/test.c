@@ -3,7 +3,6 @@
 #include <string.h>
 #include <time.h>
 
-#define DEBUG
 #include "cg.h"
 
 extern FILE *cg;

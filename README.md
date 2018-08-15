@@ -1,13 +1,13 @@
 ## TODO
 
--   head :heavy_check_mark:
+-   [x] head
 
--   body :heavy_check_mark:
+-   [x] body
 
--   foot :heavy_check_mark:
+-   [x] foot
 
--   parse options
+-   [ ] parse options
 
--   tty interaction :heavy_check_mark:
+-   [x] tty interaction
 
--   makefile
+-   [ ] makefile

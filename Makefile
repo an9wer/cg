@@ -1,24 +1,52 @@
 .DEFAULT_GOAL := all
 
-all: cg cg_test
+CC      := gcc
+RM      := rm -rf
+SED     := sed
+INSTALL := install
 
-cg: src/_cg.o src/cg.o
-	gcc -o cg src/_cg.o src/cg.o
+CFLAGS 	    += -Wall -std=c99
+CFLAGS 	    += -Wall
+CPPFLAGS    += -Isrc
+LDFLAGS     +=
+TARGET_ARCH +=
 
-cg_test: src/_cg.o test/test.o
-	gcc -o cg_test src/_cg.o test/test.o
+PREFIX      ?= /usr/local
+BINDIR      := $(PREFIX)/bin
+SRCDIR      := src
+OBJDIR      := src
+TEST_SRCDIR := test
+TEST_OBJDIR := test
 
-src/_cg.o src/cg.o: src/cg.h src/_cg.c src/cg.c
-	gcc -I src -c src/_cg.c -o src/_cg.o
-	gcc -I src -c src/cg.c -o src/cg.o
+BIN := cg
+SRC := $(SRCDIR)/_cg.c $(SRCDIR)/cg.c
+OBJ	:= $(OBJDIR)/_cg.o $(SRCDIR)/cg.o
 
-test/test.o: src/cg.h test/test.c
-	gcc -I src -c test/test.c -o test/test.o
+TEST_BIN := cg_test
+TEST_SRC := $(SRCDIR)/_cg.c $(TEST_SRCDIR)/test.c
+TEST_OBJ := $(OBJDIR)/_cg.o $(TEST_OBJDIR)/test.o
 
-.PHONY: clean uninstall
+$(BIN) : $(OBJ)
+	$(CC) $(LDFLAGS) -o $@ $^
 
+$(TEST_BIN) : $(TEST_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+$(SRCDIR)/.o : $(SRCDIR)/%.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+
+$(TEST_SRCDIR)/.o : $(TEST_SRCDIR)/%.c
+	$(SED) -i '1i #define DEBUG' $(SRCDIR)/cg.h
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+	$(SED) -i '/1/d' $(SRCDIR)/cg.h
+
+.PHONY: all
+all: $(BIN) $(TEST_BIN)
+
+.PHONY: clean
 clean:
-	-rm src/_cg.o src/cg.o test/test.o
+	$(RM) $(OBJ) $(TEST_OBJ)
 
+.PHONY: uninstall
 uninstall:
-	-rm -f cg cg_test
+	$(RM) $(BIN) $(TEST_BIN)
