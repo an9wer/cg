@@ -36,8 +36,10 @@ void test_parse(void)
     tty_run();
 }
 
+#ifdef DEBUG
 int main(void)
 {
     generate_fake_data();
     test_parse();
 }
+#endif
